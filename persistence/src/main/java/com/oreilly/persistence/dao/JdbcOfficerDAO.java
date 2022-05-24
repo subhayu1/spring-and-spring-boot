@@ -3,19 +3,20 @@ package com.oreilly.persistence.dao;
 import com.oreilly.persistence.entities.Officer;
 import com.oreilly.persistence.entities.Rank;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.IncorrectResultSizeDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.simple.SimpleJdbcInsert;
 import org.springframework.stereotype.Repository;
 
 import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Stream;
 
-@SuppressWarnings("ConstantConditions")
+@SuppressWarnings({"ConstantConditions", "SqlResolve", "SqlNoDataSourceInspection"})
 @Repository
 public class JdbcOfficerDAO implements OfficerDAO {
     private final JdbcTemplate jdbcTemplate;
@@ -48,11 +49,36 @@ public class JdbcOfficerDAO implements OfficerDAO {
 
     @Override
     public Optional<Officer> findById(Integer id) {
+        try (Stream<Officer> stream =
+                     jdbcTemplate.queryForStream(
+                             "select * from officers where id=?",
+                             officerMapper,
+                             id)) {
+            return stream.findAny();
+        }
+    }
+
+    // Alternative 1: extra SQL call to verify row exists
+    @SuppressWarnings("unused")
+    public Optional<Officer> findById1(Integer id) {
         if (!existsById(id)) return Optional.empty();
-        return Optional.of(jdbcTemplate.queryForObject(
+        return Optional.ofNullable(jdbcTemplate.queryForObject(
                 "SELECT * FROM officers WHERE id=?",
                 officerMapper,
                 id));
+    }
+
+    // Alternative 2: catch the exception when row doesn't exist
+    @SuppressWarnings("unused")
+    public Optional<Officer> findById2(Integer id) {
+        try {
+            return Optional.ofNullable(jdbcTemplate.queryForObject(
+                    "SELECT * FROM officers WHERE id=?",
+                    officerMapper,
+                    id));
+        } catch (IncorrectResultSizeDataAccessException e) {
+            return Optional.empty();
+        }
     }
 
     @Override
